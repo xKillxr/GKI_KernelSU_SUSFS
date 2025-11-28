@@ -5,16 +5,6 @@ permissions:
   actions: write
 
 on:
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - '.github/workflows/**'
-  # pull_request:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       release_type:
@@ -176,33 +166,60 @@ jobs:
         run: |
           mkdir -p ./release-files
           
-          # Find and copy only Normal-Misc and Normal-vmlinux artifacts
+          # Extract version number from tag (e.g., v1.5.12-r1 -> 1.5.12)
+          VERSION=$(echo "$NEW_TAG" | sed 's/^v//' | sed 's/-r[0-9]*$//')
+          echo "Extracted version: $VERSION"
+          
+          # Mapping of artifact patterns to android versions
+          declare -A ANDROID_VERSIONS=(
+            ["Android12-5.10"]="android12"
+            ["Android13-5.10"]="android13"
+            ["Android13-5.15"]="android13"
+            ["Android14-5.15"]="android14"
+            ["Android14-6.1"]="android14"
+            ["Android15-6.6"]="android15"
+          )
+          
+          # Process all artifacts
           for artifact_dir in ./downloaded-artifacts/*/; do
             artifact_name=$(basename "$artifact_dir")
+            echo "Processing artifact: $artifact_name"
             
-            # Process Normal-Misc artifacts (boot images)
-            if [[ "$artifact_name" == *"-Normal-Misc" ]]; then
-              echo "Processing Misc artifact: $artifact_name"
-              # Copy boot images
-              for boot_img in "$artifact_dir"/*.img; do
-                if [ -f "$boot_img" ]; then
-                  cp "$boot_img" ./release-files/
-                  echo "Copied: $(basename "$boot_img")"
+            # Extract android version and kernel version from artifact name
+            for pattern in "${!ANDROID_VERSIONS[@]}"; do
+              if [[ "$artifact_name" == *"$pattern"* ]]; then
+                android_ver="${ANDROID_VERSIONS[$pattern]}"
+                # Extract kernel version (e.g., 5.10, 5.15, 6.1, 6.6)
+                kernel_ver=$(echo "$pattern" | grep -oP '\d+\.\d+$')
+                
+                # Get year-month from artifact timestamps or use current date
+                year_month=$(date +%Y-%m)
+                
+                # Process boot images (from Normal-Misc artifacts)
+                if [[ "$artifact_name" == *"-Normal-Misc" ]]; then
+                  for boot_img in "$artifact_dir"/*.img; do
+                    if [ -f "$boot_img" ]; then
+                      # Create filename: VERSION-androidVER-YEAR-MONTH.zip
+                      new_name="${VERSION}-${android_ver}-${year_month}.zip"
+                      cp "$boot_img" "./release-files/${new_name}"
+                      echo "Created: ${new_name}"
+                    fi
+                  done
                 fi
-              done
-            fi
-            
-            # Process Normal-vmlinux artifacts
-            if [[ "$artifact_name" == *"-Normal-vmlinux" ]]; then
-              echo "Processing vmlinux artifact: $artifact_name"
-              # Copy vmlinux and rename with full artifact name
-              if [ -f "$artifact_dir/vmlinux" ]; then
-                # Extract version info from artifact name for proper naming
-                version_info=$(echo "$artifact_name" | sed 's/-Normal-vmlinux//')
-                cp "$artifact_dir/vmlinux" "./release-files/${version_info}-vmlinux"
-                echo "Copied: ${version_info}-vmlinux"
+                
+                # Process vmlinux files (from Normal-vmlinux artifacts)
+                if [[ "$artifact_name" == *"-Normal-vmlinux" ]]; then
+                  if [ -f "$artifact_dir/vmlinux" ]; then
+                    # Create filename: VERSION-androidVER-YEAR-MONTH-vmlinux.zip
+                    new_name="${VERSION}-${android_ver}-${year_month}-vmlinux.zip"
+                    cp "$artifact_dir/vmlinux" "./release-files/${new_name}"
+                    echo "Created: ${new_name}"
+                  fi
+                fi
+                
+                break
               fi
-            fi
+            done
           done
           
           echo "Release files prepared:"
@@ -231,9 +248,9 @@ jobs:
           Notes:
           -> SUS SU Mode 2 will show as disabled or not compatble due to non-kprobe hooks and is not needed anymore!
           -> Official Kernel Flasher is broken with latest susfs, try https://github.com/fatalcoder524/KernelFlasher/
-          -> **boot.img files**: Available for fastboot flashing
-          -> **vmlinux files**: Debug symbols for kernel debugging and crash analysis
-          -> **Warning**: boot.img files may not boot on some Android 16 devices
+          -> **Files ending with .zip**: Available for fastboot flashing
+          -> **Files ending with -vmlinux.zip**: Debug symbols for kernel debugging and crash analysis
+          -> **Warning**: kernel files may not boot on some Android 16 devices
       
           Module: 
           -> https://github.com/sidex15/ksu_module_susfs
