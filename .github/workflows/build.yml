@@ -496,6 +496,32 @@ jobs:
           echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "${{ env.DEFCONFIG }}"
           echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "${{ env.DEFCONFIG }}"
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "${{ env.DEFCONFIG }}"
+          # Enable /dev/mem
+          sed -i 's/^CONFIG_DEVMEM=n/# CONFIG_DEVMEM is not set/' "$defconfig"
+          sed -i 's/^# CONFIG_DEVMEM is not set/CONFIG_DEVMEM=y/' "$defconfig"
+          echo "CONFIG_DEVMEM=y" >> "$defconfig"
+
+          # Disable CONFIG_STRICT_DEVMEM
+          sed -i 's/^CONFIG_STRICT_DEVMEM=y/# CONFIG_STRICT_DEVMEM is not set/' "$defconfig"
+          echo "# CONFIG_STRICT_DEVMEM is not set" >> "$defconfig"
+
+          # Remove existing debug and network configurations
+          sed -i '/^CONFIG_DEBUG_INFO[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_DEBUG_FS[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_DEBUG_INFO_REDUCED[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_NET_9P[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_NET_9P_VIRTIO[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_GDB_SCRIPTS[= ].*/d' "$defconfig"
+          sed -i '/^CONFIG_CMDLINE[= ].*/d' "$defconfig"
+
+          # Add the required configurations
+          echo "CONFIG_DEBUG_INFO=y" >> "$defconfig"
+          echo "CONFIG_DEBUG_FS=y" >> "$defconfig"
+          echo "CONFIG_DEBUG_INFO_REDUCED=n" >> "$defconfig"
+          echo "CONFIG_NET_9P=y" >> "$defconfig"
+          echo "CONFIG_NET_9P_VIRTIO=y" >> "$defconfig"
+          echo 'CONFIG_CMDLINE="console=ttyAMA0"' >> "$defconfig"
+          echo "CONFIG_GDB_SCRIPTS=y" >> "$defconfig"
 
       - name: Configure SND
         if: ${{ inputs.variant == 'vTomsonek' && inputs.android_version == 'android12' && inputs.kernel_version == '5.10' && inputs.sub_level == '226' && inputs.os_patch_level == '2024-11' }}
